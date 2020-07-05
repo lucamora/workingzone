@@ -112,5 +112,5 @@ Temporary Items
 
 
 ### Custom ###
-!report/*.docx
-!report/*.pdf
+!*.pdf
+!*.js
