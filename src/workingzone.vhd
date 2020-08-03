@@ -77,7 +77,8 @@ begin
                     -- found working zone
                     wz_offset <= std_logic_vector(diff);
                     next_state <= ENCODE;
-                elsif (ram_address = "0000000000000111") then --todo: replace with constant
+                --elsif (ram_address = "0000000000000111") then --todo: replace with constant
+                elsif (wz_num = "111") then --todo: replace with constant
                     -- all working zone processed
                     --encoded <= address; -- todo: moved to LOAD_ADDR, remove if ok
                     next_state <= STORE_ADDR;
