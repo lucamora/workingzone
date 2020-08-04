@@ -27,9 +27,9 @@ entity project_reti_logiche is
 end project_reti_logiche;
 
 architecture fsm of project_reti_logiche is
-    type state_type is (IDLE, WAIT_ADDR, LOAD_ADDR, WAIT_WZ, LOAD_WZ, CALC_DIFF, ENCODE, STORE_ADDR, WAIT_STORE, DONE);
+    type state_type is (IDLE, WAIT_ADDR, LOAD_ADDR, LOAD_WZ, CALC_DIFF, ENCODE, STORE_ADDR, DONE);
     signal curr_state : state_type;
-    signal address, encoded, wz_address : std_logic_vector(7 downto 0) := (others => '0');
+    signal address, wz_address : std_logic_vector(7 downto 0) := (others => '0');
     signal wz_num : std_logic_vector(2 downto 0) := (others => '0');
     signal wz_offset : unsigned(2 downto 0) := (others => '0');
     signal ram_address : std_logic_vector(15 downto 0) := (others => '0');
@@ -43,7 +43,6 @@ begin
             case curr_state is
                 when IDLE =>
                     address <= "00000000";
-                    encoded <= "00000000";
                     o_en <= '0';
                     o_we <= '0';
                     o_data <= "00000000";
@@ -59,18 +58,15 @@ begin
                         curr_state <= WAIT_ADDR;
                     end if;
                 when WAIT_ADDR =>
-                    curr_state <= LOAD_ADDR;
-                when LOAD_ADDR =>
-                    address <= i_data;
-                    -- save address as default output
-                    encoded <= i_data; -- todo: check if ok
-
+                    -- while waiting for address to be loaded from RAM
+                    -- preload first wz RAM address
                     ram_address <= "0000000000000000"; --todo: replace with constant
                     o_address <= "0000000000000000";
 
-                    --curr_state <= LOAD_WZ;
-                    curr_state <= WAIT_WZ;
-                when WAIT_WZ =>
+                    curr_state <= LOAD_ADDR;
+                when LOAD_ADDR =>
+                    address <= i_data;
+
                     curr_state <= LOAD_WZ;
                 when LOAD_WZ =>
                     wz_address <= i_data;
@@ -82,10 +78,11 @@ begin
                     curr_state <= CALC_DIFF;
                 when CALC_DIFF =>
                     diff := unsigned(address) - unsigned(wz_address);
+                    wz_offset <= diff(2 downto 0);
+
                     -- since diff is unsigned, negative values are not allowed
                     if (diff < 4) then --todo: check
                         -- found working zone
-                        wz_offset <= diff(2 downto 0);
                         curr_state <= ENCODE;
                     elsif (wz_num = "111") then --todo: replace with constant
                         -- all working zone processed
@@ -95,8 +92,8 @@ begin
                         curr_state <= LOAD_WZ;
                     end if;
                 when ENCODE =>
-                    encoded <= '1' & wz_num & "0000"; -- check
-                    encoded(to_integer(wz_offset)) <= '1';
+                    address <= '1' & wz_num & "0000"; -- check
+                    address(to_integer(wz_offset)) <= '1';
 
                     curr_state <= STORE_ADDR;
                 when STORE_ADDR =>
@@ -104,11 +101,8 @@ begin
                     o_address <= "0000000000001001";
 
                     o_we <= '1';
-                    o_data <= encoded;
+                    o_data <= address;
                     
-                    --curr_state <= DONE;
-                    curr_state <= WAIT_STORE;
-                when WAIT_STORE =>
                     curr_state <= DONE;
                 when DONE =>
                     o_en <= '0';
@@ -117,6 +111,7 @@ begin
                     curr_state <= DONE;
 
                     if (i_start = '0') then
+                        o_done <= '0';
                         curr_state <= IDLE;
                     end if;
             end case;
