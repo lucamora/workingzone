@@ -31,7 +31,6 @@ architecture fsm of project_reti_logiche is
     signal curr_state : state_type;
     signal address, encoded, wz_address : std_logic_vector(7 downto 0) := (others => '0');
     signal wz_num : std_logic_vector(2 downto 0) := (others => '0');
-    --signal wz_offset : std_logic_vector(3 downto 0);
     signal wz_offset : unsigned(2 downto 0) := (others => '0');
     signal ram_address : std_logic_vector(15 downto 0) := (others => '0');
 begin
@@ -77,8 +76,6 @@ begin
                     wz_address <= i_data;
                     wz_num <= ram_address(2 downto 0);
 
-                    --ram_address <= ram_address + 1; --todo: check ... + "0000000000000001"
-                    --o_address <= ram_address + 1; --todo: check ... + "0000000000000001"
                     ram_address <= ram_address + "0000000000000001";
                     o_address <= ram_address + "0000000000000001";
 
@@ -88,13 +85,10 @@ begin
                     -- since diff is unsigned, negative values are not allowed
                     if (diff < 4) then --todo: check
                         -- found working zone
-                        --wz_offset <= std_logic_vector(diff(3 downto 0));
                         wz_offset <= diff(2 downto 0);
                         curr_state <= ENCODE;
-                    --elsif (ram_address = "0000000000000111") then --todo: replace with constant
                     elsif (wz_num = "111") then --todo: replace with constant
                         -- all working zone processed
-                        --encoded <= address; -- todo: moved to LOAD_ADDR, remove if ok
                         curr_state <= STORE_ADDR;
                     else
                         -- go to next working zone
@@ -102,7 +96,6 @@ begin
                     end if;
                 when ENCODE =>
                     encoded <= '1' & wz_num & "0000"; -- check
-                    --encoded(to_integer(unsigned(wz_offset))) <= '1';
                     encoded(to_integer(wz_offset)) <= '1';
 
                     curr_state <= STORE_ADDR;
@@ -124,7 +117,6 @@ begin
                     curr_state <= DONE;
 
                     if (i_start = '0') then
-                        --o_done <= '0';
                         curr_state <= IDLE;
                     end if;
             end case;
