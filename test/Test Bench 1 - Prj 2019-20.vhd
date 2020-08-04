@@ -97,7 +97,7 @@ begin
     tb_start <= '0';
     wait until tb_done = '0';
 
-    -- Maschera di output = 180
+    -- Maschera di output = 1 - 011 - 0100
     assert RAM(9) = std_logic_vector(to_unsigned( 180 , 8)) report "TEST FALLITO. Expected  180  found " & integer'image(to_integer(unsigned(RAM(9))))  severity failure;
  
     assert false report "Simulation Ended!, TEST PASSATO" severity failure;
