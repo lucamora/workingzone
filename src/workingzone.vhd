@@ -28,111 +28,106 @@ end project_reti_logiche;
 
 architecture fsm of project_reti_logiche is
     type state_type is (IDLE, WAIT_ADDR, LOAD_ADDR, WAIT_WZ, LOAD_WZ, CALC_DIFF, ENCODE, STORE_ADDR, WAIT_STORE, DONE);
-    signal curr_state, next_state : state_type;
+    signal curr_state : state_type;
     signal address, encoded, wz_address : std_logic_vector(7 downto 0) := (others => '0');
     signal wz_num : std_logic_vector(2 downto 0) := (others => '0');
     --signal wz_offset : std_logic_vector(3 downto 0);
     signal wz_offset : unsigned(2 downto 0) := (others => '0');
     signal ram_address : std_logic_vector(15 downto 0) := (others => '0');
 begin
-    state_register : process(i_clk, i_rst)
+    global : process(i_clk, i_rst, i_start)
+        variable diff : unsigned(7 downto 0); -- check signal size
     begin
         if (i_rst = '1') then
             curr_state <= IDLE;
         elsif (rising_edge(i_clk)) then
-            curr_state <= next_state;
+            case curr_state is
+                when IDLE =>
+                    address <= "00000000";
+                    encoded <= "00000000";
+                    o_en <= '0';
+                    o_we <= '0';
+                    o_data <= "00000000";
+                    o_done <= '0';
+                    curr_state <= IDLE;
+                    
+                    ram_address <= "0000000000001000"; --todo: replace with constant
+                    o_address <= "0000000000001000";
+
+                    if (i_start = '1') then
+                        o_en <= '1';
+                        --curr_state <= LOAD_ADDR;
+                        curr_state <= WAIT_ADDR;
+                    end if;
+                when WAIT_ADDR =>
+                    curr_state <= LOAD_ADDR;
+                when LOAD_ADDR =>
+                    address <= i_data;
+                    -- save address as default output
+                    encoded <= i_data; -- todo: check if ok
+
+                    ram_address <= "0000000000000000"; --todo: replace with constant
+                    o_address <= "0000000000000000";
+
+                    --curr_state <= LOAD_WZ;
+                    curr_state <= WAIT_WZ;
+                when WAIT_WZ =>
+                    curr_state <= LOAD_WZ;
+                when LOAD_WZ =>
+                    wz_address <= i_data;
+                    wz_num <= ram_address(2 downto 0);
+
+                    --ram_address <= ram_address + 1; --todo: check ... + "0000000000000001"
+                    --o_address <= ram_address + 1; --todo: check ... + "0000000000000001"
+                    ram_address <= ram_address + "0000000000000001";
+                    o_address <= ram_address + "0000000000000001";
+
+                    curr_state <= CALC_DIFF;
+                when CALC_DIFF =>
+                    diff := unsigned(address) - unsigned(wz_address);
+                    -- since diff is unsigned, negative values are not allowed
+                    if (diff < 4) then --todo: check
+                        -- found working zone
+                        --wz_offset <= std_logic_vector(diff(3 downto 0));
+                        wz_offset <= diff(2 downto 0);
+                        curr_state <= ENCODE;
+                    --elsif (ram_address = "0000000000000111") then --todo: replace with constant
+                    elsif (wz_num = "111") then --todo: replace with constant
+                        -- all working zone processed
+                        --encoded <= address; -- todo: moved to LOAD_ADDR, remove if ok
+                        curr_state <= STORE_ADDR;
+                    else
+                        -- go to next working zone
+                        curr_state <= LOAD_WZ;
+                    end if;
+                when ENCODE =>
+                    encoded <= '1' & wz_num & "0000"; -- check
+                    --encoded(to_integer(unsigned(wz_offset))) <= '1';
+                    encoded(to_integer(wz_offset)) <= '1';
+
+                    curr_state <= STORE_ADDR;
+                when STORE_ADDR =>
+                    ram_address <= "0000000000001001"; --todo: replace with constant
+                    o_address <= "0000000000001001";
+
+                    o_we <= '1';
+                    o_data <= encoded;
+                    
+                    --curr_state <= DONE;
+                    curr_state <= WAIT_STORE;
+                when WAIT_STORE =>
+                    curr_state <= DONE;
+                when DONE =>
+                    o_en <= '0';
+                    o_we <= '0';
+                    o_done <= '1';
+                    curr_state <= DONE;
+
+                    if (i_start = '0') then
+                        --o_done <= '0';
+                        curr_state <= IDLE;
+                    end if;
+            end case;
         end if;
-    end process;
-
-    lambda_delta : process(curr_state, i_start)
-        variable diff : unsigned(7 downto 0); -- check signal size
-    begin
-        case curr_state is
-            when IDLE =>
-                address <= "00000000";
-                encoded <= "00000000";
-                o_en <= '0';
-                o_we <= '0';
-                o_data <= "00000000";
-                o_done <= '0';
-                next_state <= IDLE;
-                
-                ram_address <= "0000000000001000"; --todo: replace with constant
-                o_address <= "0000000000001000";
-
-                if (i_start = '1') then
-                    o_en <= '1';
-                    --next_state <= LOAD_ADDR;
-                    next_state <= WAIT_ADDR;
-                end if;
-            when WAIT_ADDR =>
-                next_state <= LOAD_ADDR;
-            when LOAD_ADDR =>
-                address <= i_data;
-                -- save address as default output
-                encoded <= i_data; -- todo: check if ok
-
-                ram_address <= "0000000000000000"; --todo: replace with constant
-                o_address <= "0000000000000000";
-
-                --next_state <= LOAD_WZ;
-                next_state <= WAIT_WZ;
-            when WAIT_WZ =>
-                next_state <= LOAD_WZ;
-            when LOAD_WZ =>
-                wz_address <= i_data;
-                wz_num <= ram_address(2 downto 0);
-
-                --ram_address <= ram_address + 1; --todo: check ... + "0000000000000001"
-                --o_address <= ram_address + 1; --todo: check ... + "0000000000000001"
-                ram_address <= ram_address + "0000000000000001";
-                o_address <= ram_address + "0000000000000001";
-
-                next_state <= CALC_DIFF;
-            when CALC_DIFF =>
-                diff := unsigned(address) - unsigned(wz_address);
-                -- since diff is unsigned, negative values are not allowed
-                if (diff < 4) then --todo: check
-                    -- found working zone
-                    --wz_offset <= std_logic_vector(diff(3 downto 0));
-                    wz_offset <= diff(2 downto 0);
-                    next_state <= ENCODE;
-                --elsif (ram_address = "0000000000000111") then --todo: replace with constant
-                elsif (wz_num = "111") then --todo: replace with constant
-                    -- all working zone processed
-                    --encoded <= address; -- todo: moved to LOAD_ADDR, remove if ok
-                    next_state <= STORE_ADDR;
-                else
-                    -- go to next working zone
-                    next_state <= LOAD_WZ;
-                end if;
-            when ENCODE =>
-                encoded <= '1' & wz_num & "0000"; -- check
-                --encoded(to_integer(unsigned(wz_offset))) <= '1';
-                encoded(to_integer(wz_offset)) <= '1';
-
-                next_state <= STORE_ADDR;
-            when STORE_ADDR =>
-                ram_address <= "0000000000001001"; --todo: replace with constant
-                o_address <= "0000000000001001";
-
-                o_we <= '1';
-                o_data <= encoded;
-                
-                --next_state <= DONE;
-                next_state <= WAIT_STORE;
-            when WAIT_STORE =>
-                next_state <= DONE;
-            when DONE =>
-                o_en <= '0';
-                o_we <= '0';
-                o_done <= '1';
-                next_state <= DONE;
-
-                if (i_start = '0') then
-                    --o_done <= '0';
-                    next_state <= IDLE;
-                end if;
-        end case;  
     end process;
 end fsm;
