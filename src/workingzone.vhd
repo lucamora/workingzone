@@ -27,12 +27,17 @@ entity project_reti_logiche is
 end project_reti_logiche;
 
 architecture fsm of project_reti_logiche is
-    type state_type is (IDLE, WAIT_ADDR, LOAD_ADDR, LOAD_WZ, CALC_DIFF, STORE_ADDR, WAIT_STORE, DONE);
+    type state_type is (IDLE, WAIT_ADDR, LOAD_ADDR, WAIT_WZ, COMPUTE, PREPARE, STORE, DONE);
     signal curr_state : state_type;
     signal address : unsigned(7 downto 0) := (others => '0');
     signal wz_num : std_logic_vector(2 downto 0) := (others => '0');
     signal ram_index : std_logic_vector(3 downto 0) := (others => '0');
     signal diff : unsigned(7 downto 0);
+
+    constant address_index : std_logic_vector(3 downto 0) := "1000";
+    constant first_wz_index : std_logic_vector(3 downto 0) := "0000";
+    constant output_index : std_logic_vector(3 downto 0) := "1001";
+    constant last_wz : std_logic_vector(2 downto 0) := "111";
 begin
     global : process(i_clk, i_rst, i_start)
     begin
@@ -46,8 +51,8 @@ begin
                     diff <= "00000000";
                     curr_state <= IDLE;
                     
-                    ram_index <= "1000"; --todo: replace with constant
-                    o_address <= "0000000000001000";
+                    ram_index <= address_index;
+                    o_address <= "000000000000" & address_index;
                     wz_num <= "000";
 
                     if (i_start = '1') then
@@ -56,8 +61,8 @@ begin
                 when WAIT_ADDR =>
                     -- while waiting for address to be loaded from RAM
                     -- preload first wz RAM address
-                    ram_index <= "0000"; --todo: replace with constant
-                    o_address <= "0000000000000000";
+                    ram_index <= first_wz_index;
+                    o_address <= "000000000000" & first_wz_index;
 
                     curr_state <= LOAD_ADDR;
                 when LOAD_ADDR =>
@@ -68,8 +73,8 @@ begin
                     ram_index <= ram_index + "0001";
                     o_address(3 downto 0) <= (ram_index + "0001");
 
-                    curr_state <= LOAD_WZ;
-                when LOAD_WZ =>
+                    curr_state <= WAIT_WZ;
+                when WAIT_WZ =>
                     -- compute diff for the first wz that will be checked in the next clock cycle
                     diff <= address - unsigned(i_data);
                     
@@ -80,24 +85,24 @@ begin
                     ram_index <= ram_index + "0001";
                     o_address(3 downto 0) <= (ram_index + "0001");
 
-                    curr_state <= CALC_DIFF;
-                when CALC_DIFF =>
+                    curr_state <= COMPUTE;
+                when COMPUTE =>
                     -- as default go to next working zone
-                    curr_state <= CALC_DIFF;
+                    curr_state <= COMPUTE;
                     o_data <= std_logic_vector(address);
 
                     -- since diff is unsigned, negative values are not allowed
-                    if (diff < 4) then --todo: check
+                    if (diff < 4) then
                         -- found working zone
-                        o_data <= '1' & wz_num & "0000"; -- check
+                        o_data <= '1' & wz_num & "0000";
                         o_data(to_integer(diff(1 downto 0))) <= '1';
 
-                        curr_state <= STORE_ADDR;
+                        curr_state <= PREPARE;
                     end if;
 
-                    if (wz_num = "111") then --todo: replace with constant
+                    if (wz_num = last_wz) then
                         -- all working zone processed
-                        curr_state <= STORE_ADDR;
+                        curr_state <= PREPARE;
                     end if;
 
                     -- compute diff for the next wz
@@ -109,12 +114,12 @@ begin
                     -- load next wz
                     ram_index <= ram_index + "0001";
                     o_address(3 downto 0) <= (ram_index + "0001");
-                when STORE_ADDR =>
-                    o_address <= "0000000000001001"; --todo: replace with constant
+                when PREPARE =>
+                    ram_index <= output_index;
+                    o_address <= "000000000000" & output_index;
                     
-                    curr_state <= WAIT_STORE;
-                when WAIT_STORE =>
-
+                    curr_state <= STORE;
+                when STORE =>
                     curr_state <= DONE;
                 when DONE =>
                     curr_state <= DONE;
@@ -133,7 +138,7 @@ begin
                   '0' when others;
 
     with curr_state select
-        o_we <= '1' when WAIT_STORE,
+        o_we <= '1' when STORE,
                 '0' when others;
 
     with curr_state select
