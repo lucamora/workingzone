@@ -34,9 +34,9 @@ architecture fsm of project_reti_logiche is
     signal ram_index : std_logic_vector(3 downto 0) := (others => '0');
     signal diff : unsigned(7 downto 0);
 
-    constant address_index : std_logic_vector(3 downto 0) := "1000";
-    constant first_wz_index : std_logic_vector(3 downto 0) := "0000";
-    constant output_index : std_logic_vector(3 downto 0) := "1001";
+    constant address_index : std_logic_vector(15 downto 0) := "0000000000001000";
+    constant first_wz_index : std_logic_vector(15 downto 0) := "0000000000000000";
+    constant output_index : std_logic_vector(15 downto 0) := "0000000000001001";
     constant last_wz : std_logic_vector(2 downto 0) := "111";
 begin
     global : process(i_clk, i_rst, i_start)
@@ -51,8 +51,8 @@ begin
                     diff <= "00000000";
                     curr_state <= IDLE;
                     
-                    ram_index <= address_index;
-                    o_address <= "000000000000" & address_index;
+                    ram_index <= address_index(3 downto 0);
+                    o_address <= address_index;
                     wz_num <= "000";
 
                     if (i_start = '1') then
@@ -61,8 +61,8 @@ begin
                 when WAIT_ADDR =>
                     -- while waiting for address to be loaded from RAM
                     -- preload first wz RAM address
-                    ram_index <= first_wz_index;
-                    o_address <= "000000000000" & first_wz_index;
+                    ram_index <= first_wz_index(3 downto 0);
+                    o_address <= first_wz_index;
 
                     curr_state <= LOAD_ADDR;
                 when LOAD_ADDR =>
@@ -115,8 +115,8 @@ begin
                     ram_index <= ram_index + "0001";
                     o_address(3 downto 0) <= (ram_index + "0001");
                 when PREPARE =>
-                    ram_index <= output_index;
-                    o_address <= "000000000000" & output_index;
+                    ram_index <= output_index(3 downto 0);
+                    o_address <= output_index;
                     
                     curr_state <= STORE;
                 when STORE =>
