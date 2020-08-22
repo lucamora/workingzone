@@ -49,6 +49,7 @@ begin
                     address <= "00000000";
                     o_data <= "00000000";
                     diff <= "00000000";
+                    o_done <= '0';
                     curr_state <= IDLE;
                     
                     ram_index <= address_index(3 downto 0);
@@ -120,22 +121,22 @@ begin
                     
                     curr_state <= STORE;
                 when STORE =>
+                    -- notify encoding termination in the next cycle
+                    o_done <= '1';
+                    
                     curr_state <= DONE;
                 when DONE =>
                     curr_state <= DONE;
 
                     if (i_start = '0') then
                         curr_state <= IDLE;
+                        o_done <= '0';
                     end if;
                 when others =>
                     curr_state <= IDLE;
             end case;
         end if;
     end process;
-
-    with curr_state select
-        o_done <= '1' when DONE,
-                  '0' when others;
 
     with curr_state select
         o_we <= '1' when STORE,
