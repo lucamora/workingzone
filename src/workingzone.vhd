@@ -28,16 +28,19 @@ end project_reti_logiche;
 
 architecture fsm of project_reti_logiche is
     type state_type is (IDLE, WAIT_ADDR, LOAD_ADDR, WAIT_WZ, COMPUTE, PREPARE, STORE, DONE);
-    signal curr_state : state_type;
-    signal address : unsigned(7 downto 0) := (others => '0');
-    signal wz_num : std_logic_vector(2 downto 0) := (others => '0');
-    signal ram_index : std_logic_vector(3 downto 0) := (others => '0');
-    signal diff : unsigned(7 downto 0);
 
-    constant address_index : std_logic_vector(15 downto 0) := "0000000000001000";
-    constant first_wz_index : std_logic_vector(15 downto 0) := "0000000000000000";
-    constant output_index : std_logic_vector(15 downto 0) := "0000000000001001";
-    constant last_wz : std_logic_vector(2 downto 0) := "111";
+    -- internal registers
+    signal curr_state : state_type; -- current state of the FSM
+    signal address : unsigned(7 downto 0) := (others => '0'); -- address to be encoded
+    signal wz_num : std_logic_vector(2 downto 0) := (others => '0'); -- number of the wz that is currently processed
+    signal ram_index : std_logic_vector(3 downto 0) := (others => '0'); -- index of the next RAM address to be loaded
+    signal diff : unsigned(7 downto 0); -- difference between the address to be encoded and the current wz
+
+    -- internal constants
+    constant address_index : std_logic_vector(15 downto 0) := "0000000000001000"; -- RAM index of the address to be encoded
+    constant first_wz_index : std_logic_vector(15 downto 0) := "0000000000000000"; -- RAM index of the first wz
+    constant output_index : std_logic_vector(15 downto 0) := "0000000000001001"; -- RAM index of the output
+    constant last_wz : std_logic_vector(2 downto 0) := "111"; -- number of the last wz
 begin
     global : process(i_clk, i_rst, i_start)
     begin
@@ -46,12 +49,14 @@ begin
         elsif (rising_edge(i_clk)) then
             case curr_state is
                 when IDLE =>
+                    -- initialize internal register and output signals
                     address <= "00000000";
                     o_data <= "00000000";
                     diff <= "00000000";
                     o_done <= '0';
                     curr_state <= IDLE;
                     
+                    -- preload RAM address of the value to be encoded
                     ram_index <= address_index(3 downto 0);
                     o_address <= address_index;
                     wz_num <= "000";
@@ -67,6 +72,7 @@ begin
 
                     curr_state <= LOAD_ADDR;
                 when LOAD_ADDR =>
+                    -- store address to be encoded
                     address <= unsigned(i_data);
                     
                     -- while loading address from RAM
@@ -76,10 +82,11 @@ begin
 
                     curr_state <= WAIT_WZ;
                 when WAIT_WZ =>
+                    -- on i_data there is the base address of the first wz, requested in the previous clock cycle
                     -- compute diff for the first wz that will be checked in the next clock cycle
                     diff <= address - unsigned(i_data);
                     
-                    -- initialize zw_num for the first wz
+                    -- initialize wz_num with the value of the first wz
                     wz_num <= "000";
 
                     -- load next wz
@@ -92,30 +99,32 @@ begin
                     curr_state <= COMPUTE;
                     o_data <= std_logic_vector(address);
 
-                    -- since diff is unsigned, negative values are not allowed
+                    -- since diff is unsigned, negative values are not represented
                     if (diff < 4) then
                         -- found working zone
-                        o_data <= '1' & wz_num & "0000";
-                        o_data(to_integer(diff(1 downto 0))) <= '1';
+                        o_data <= '1' & wz_num & "0000"; -- assign wz_bit and wz_num
+                        o_data(to_integer(diff(1 downto 0))) <= '1'; -- assign wz_offset
 
                         curr_state <= PREPARE;
                     end if;
 
+                    -- check if wz are ended
                     if (wz_num = last_wz) then
                         -- all working zone processed
                         curr_state <= PREPARE;
                     end if;
 
-                    -- compute diff for the next wz
+                    -- compute diff for the next wz that will be checked in the next clock cycle
                     diff <= address - unsigned(i_data);
 
-                    -- calculate zw_num of the next wz
+                    -- calculate wz_num with the value of the next wz
                     wz_num <= wz_num + "001";
 
                     -- load next wz
                     ram_index <= ram_index + "0001";
                     o_address(3 downto 0) <= (ram_index + "0001");
                 when PREPARE =>
+                    -- load RAM address of the cell where the output has to be stored
                     ram_index <= output_index(3 downto 0);
                     o_address <= output_index;
                     
@@ -138,6 +147,7 @@ begin
         end if;
     end process;
 
+    -- manage o_we and o_en signals that depend only on the current FSM state
     with curr_state select
         o_we <= '1' when STORE,
                 '0' when others;
